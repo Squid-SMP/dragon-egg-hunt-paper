@@ -1,7 +1,7 @@
 name: DragonEggHunt
-version: '${project.version}'
+version: '\${project.version}'
 main: com.zartu.dragonegghunt.DragonEggHunt
-api-version: 1.21
+api-version: '1.21'
 authors: [Zartu]
 description: A CTF style Dragon Egg plugin with tracking and leaderboards.
 
