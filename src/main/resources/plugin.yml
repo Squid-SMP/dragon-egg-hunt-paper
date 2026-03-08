@@ -1,0 +1,28 @@
+name: DragonEggHunt
+version: '${project.version}'
+main: com.zartu.dragonegghunt.DragonEggHunt
+api-version: 1.21
+authors: [Zartu]
+description: A CTF style Dragon Egg plugin with tracking and leaderboards.
+
+commands:
+  trackegg:
+    description: Gives a vague location of the Dragon Egg.
+    permission: dragonegg.track
+  seteggspawn:
+    description: Sets the safe respawn location for the Egg.
+    permission: dragonegg.admin
+  giveegg:
+    description: Spawns the custom egg item for testing.
+    permission: dragonegg.admin
+  eggleaderboard:
+    description: Displays who has held the egg the longest.
+    permission: dragonegg.track
+
+permissions:
+  dragonegg.track:
+    description: Allows tracking the egg
+    default: true
+  dragonegg.admin:
+    description: Admin commands
+    default: op
