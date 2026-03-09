@@ -1,5 +1,7 @@
 package com.zartu.dragonegghunt;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -13,7 +15,6 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.Collection;
-import java.util.UUID;
 
 public class DehEggManager {
     public NamespacedKey eggKey;
@@ -129,7 +130,8 @@ public class DehEggManager {
         ItemMeta meta = egg.getItemMeta();
 
         if (meta != null) {
-            meta.setDisplayName(NamedTextColor.DARK_PURPLE + "The Artifact");
+            TextComponent textComponent = Component.text("The Artifact").color(NamedTextColor.DARK_PURPLE);
+            meta.customName(textComponent);
             meta.getPersistentDataContainer().set(eggKey, PersistentDataType.BYTE, (byte) 1);
             egg.setItemMeta(meta);
         }
@@ -160,7 +162,7 @@ public class DehEggManager {
 
         ItemStack egg = createSpecialEgg();
         p.getInventory().addItem(egg);
-        p.sendMessage("Received Artifact.");
+        plugin.sendMessage(p, "Received Artifact.", NamedTextColor.WHITE);
     }
 
     private void stripEgg(Player p)
@@ -256,7 +258,7 @@ public class DehEggManager {
         }
 
         if (target == null) {
-            tracker.sendMessage(NamedTextColor.RED + "Signal lost. (The Artifact may be lost in time...)");
+            plugin.sendMessage(tracker, "Signal lost. (The Artifact may be lost in time...)", NamedTextColor.RED);
             return;
         }
 
@@ -268,9 +270,9 @@ public class DehEggManager {
         int cX = target.getBlockX() + offsetX;
         int cZ = target.getBlockZ() + offsetZ;
 
-        tracker.sendMessage(NamedTextColor.GOLD + "--- Artifact Tracker (" + status + ") ---");
-        tracker.sendMessage(NamedTextColor.YELLOW + "Search Area: X[" + (cX - radius) + " : " + (cX + radius) + "]");
-        tracker.sendMessage(NamedTextColor.YELLOW + "Search Area: Z[" + (cZ - radius) + " : " + (cZ + radius) + "]");
+        plugin.sendMessage(tracker, "--- Artifact Tracker (" + status + ") ---", NamedTextColor.GOLD);
+        plugin.sendMessage(tracker, "Search Area: X[" + (cX - radius) + " : " + (cX + radius) + "]", NamedTextColor.YELLOW);
+        plugin.sendMessage(tracker, "Search Area: Z[" + (cZ - radius) + " : " + (cZ + radius) + "]", NamedTextColor.YELLOW);
     }
 
     public void stripAndRespawnEgg(Player p) {

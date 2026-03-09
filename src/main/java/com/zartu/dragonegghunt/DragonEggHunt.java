@@ -1,5 +1,6 @@
 package com.zartu.dragonegghunt;
 
+import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.TextComponent;
@@ -131,11 +132,11 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             switch (toEnv) {
                 case World.Environment.THE_END:
                     eggManager.stripAndRespawnEgg(p);
-                    p.sendMessage(NamedTextColor.RED + "The Artifact cannot enter The End!");
+                    sendMessage(p, "The Artifact cannot enter The End!", NamedTextColor.RED);
                     break;
                 case World.Environment.NETHER:
                     eggManager.stripAndRespawnEgg(p);
-                    p.sendMessage(NamedTextColor.RED + "The Artifact cannot enter The Nether!");
+                    sendMessage(p, "The Artifact cannot enter The Nether!", NamedTextColor.RED);
             }
         }
     }
@@ -146,7 +147,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             ItemStack hand = event.getPlayer().getInventory().getItem(event.getHand());
             if (eggManager.isSpecialEgg(hand)) {
                 event.setCancelled(true);
-                event.getPlayer().sendMessage(NamedTextColor.RED + "The Artifact cannot be framed!");
+                sendMessage(event.getPlayer(), "The Artifact cannot be framed!", NamedTextColor.RED);
             }
         }
     }
@@ -158,7 +159,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             ItemStack current = event.getCurrentItem();
             if (current != null && current.getType() == Material.BUNDLE) {
                 event.setCancelled(true);
-                event.getWhoClicked().sendMessage(NamedTextColor.RED + "The Artifact is too powerful for a bundle!");
+                sendMessage(event.getWhoClicked(), "The Artifact is too powerful for a bundle!", NamedTextColor.RED);
             }
         }
     }
@@ -198,7 +199,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         if ((eggManager.isSpecialEgg(current) || eggManager.isSpecialEgg(cursor)) && isContainer) {
             if (event.getClickedInventory() == event.getView().getTopInventory() || event.isShiftClick()) {
                 event.setCancelled(true);
-                event.getWhoClicked().sendMessage(NamedTextColor.RED + "The Artifact refuses to be contained!");
+                sendMessage(event.getWhoClicked(), "The Artifact refuses to be contained!", NamedTextColor.RED);
             }
         }
     }
@@ -264,7 +265,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     @EventHandler
     public void onPlayerPickup(EntityPickupItemEvent event) {
         if (event.getEntity() instanceof Player p && eggManager.isSpecialEgg(event.getItem().getItemStack())) {
-            p.sendMessage(NamedTextColor.GREEN + "You have seized the Artifact! Keep it safe!");
+            sendMessage(p,"You have seized the Artifact! Keep it safe!", NamedTextColor.GREEN);
             broadcast("⚠ The Artifact has been picked up! ⚠", NamedTextColor.DARK_RED);
             pickupTimes.put(p.getUniqueId(), System.currentTimeMillis());
             leaderboard.incrementStat(p.getUniqueId(), "captures");
@@ -277,7 +278,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             event.setCancelled(false);
             event.setBuild(true);
             eggManager.saveEggBlockLocation(event.getBlock().getLocation());
-            event.getPlayer().sendMessage(NamedTextColor.GOLD + "The Artifact is secured. Tracking active.");
+            sendMessage(event.getPlayer(), "The Artifact is secured. Tracking active.", NamedTextColor.GOLD);
             broadcast("The Artifact has been placed in the world!", NamedTextColor.GOLD);
         }
     }
@@ -288,7 +289,6 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             if (eggManager.isSavedEggLocation(event.getBlock().getLocation())) {
                 event.setCancelled(false);
                 event.setDropItems(false);
-                Item dropped = event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), eggManager.createSpecialEgg());
                 eggManager.clearEggBlockLocation();
                 broadcast( "⚠ The Artifact has been dislodged! ⚠", NamedTextColor.DARK_RED);
             }
@@ -331,5 +331,10 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     public void broadcast(String text, TextColor color) {
         TextComponent textComponent = Component.text(text).color(color);
         server.broadcast(textComponent);
+    }
+
+    public void sendMessage(Audience audience, String text, TextColor color) {
+        TextComponent textComponent = Component.text(text).color(color);
+        audience.sendMessage(textComponent);
     }
 }

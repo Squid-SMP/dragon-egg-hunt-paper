@@ -66,7 +66,7 @@ public class DehCommandManager {
                 double y = playerLoc.getBlockY();
                 double z = playerLoc.getBlockZ();
 
-                p.sendMessage(NamedTextColor.GREEN + "Spawn location set! (Snapped to block coordinates: " + x + ", " + y + ", " + z + ")");
+                plugin.sendMessage(p, "Spawn location set! (Snapped to block coordinates: " + x + ", " + y + ", " + z + ")", NamedTextColor.GREEN);
                 return true;
 
             case CMD_TRACK:
@@ -88,7 +88,7 @@ public class DehCommandManager {
                     loc = eggManager.spawnLocation;
                 }
 
-                p.sendMessage(NamedTextColor.GRAY + "Current location of the egg is: " + loc.toString());
+                plugin.sendMessage(p, "Current location of the egg is: " + loc.getX() + ", " + loc.getY() + ", " + loc.getZ(), NamedTextColor.GRAY);
                 return true;
         }
 
