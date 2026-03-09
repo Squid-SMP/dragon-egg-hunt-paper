@@ -6,15 +6,15 @@ authors: [Zartu]
 description: A CTF style Dragon Egg plugin with tracking and leaderboards.
 
 commands:
-  trackegg:
+  eggtrack:
     description: Gives a vague location of the Dragon Egg.
     permission: dragonegg.track
-  seteggspawn:
+  eggsetspawn:
     description: Sets the safe respawn location for the Egg.
     permission: dragonegg.admin
-  giveegg:
+  eggreset:
     description: Spawns the custom egg item for testing.
-    permission: dragonegg.admin
+    permission: dragonegg.mod
   eggleaderboard:
     description: Displays who has held the egg the longest.
     permission: dragonegg.track
@@ -23,6 +23,9 @@ permissions:
   dragonegg.track:
     description: Allows tracking the egg
     default: true
+  dragonegg.mod:
+    description: Moderator commands
+    default: op
   dragonegg.admin:
     description: Admin commands
     default: op
