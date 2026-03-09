@@ -292,14 +292,18 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         }
 
         Location blockLocation = clickedBlock.getLocation();
-        if (eggManager.isSavedEggLocation(blockLocation)) {
-            clickedBlock.setType(Material.AIR);
+        clickedBlock.setType(Material.AIR);
 
+        if (eggManager.isSavedEggLocation(blockLocation)) {
             ItemStack item = eggManager.createSpecialEgg();
             forceIntoMainHand(player, item);
 
             eggManager.clearEggBlockLocation();
             broadcast("⚠ The Artifact has been stolen! ⚠", NamedTextColor.DARK_RED);
+        }
+        else {
+            ItemStack egg = new ItemStack(Material.DRAGON_EGG);
+            clickedBlock.getWorld().dropItemNaturally(clickedBlock.getLocation(), egg);
         }
     }
 
