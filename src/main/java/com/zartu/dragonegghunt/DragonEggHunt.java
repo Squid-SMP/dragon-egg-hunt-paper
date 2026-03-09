@@ -16,11 +16,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
-import org.bukkit.event.entity.EntityChangeBlockEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.*;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
-import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerDropItemEvent;
@@ -329,11 +326,20 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     }
 
     @EventHandler
-    public void onFallingBlockLand(EntityChangeBlockEvent event) {
-        if (event.getEntity() instanceof FallingBlock fallingBlock) {
-            if (fallingBlock.getBlockData().getMaterial() == Material.DRAGON_EGG) {
-                eggManager.saveEggBlockLocation(event.getBlock().getLocation());
+    public void onFallingBlockSpawn(EntitySpawnEvent event) {
+        Entity entity = event.getEntity();
+        if (entity instanceof FallingBlock falling) {
+            if (falling.getBlockData().getMaterial() == Material.DRAGON_EGG) {
+                event.setCancelled(true);
+                entity.getLocation().getBlock().setType(Material.DRAGON_EGG);
             }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBlockPhysics(BlockPhysicsEvent event) {
+        if (event.getChangedType() == Material.DRAGON_EGG) {
+            event.setCancelled(true);
         }
     }
 
