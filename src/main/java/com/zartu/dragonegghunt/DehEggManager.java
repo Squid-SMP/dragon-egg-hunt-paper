@@ -232,8 +232,6 @@ public class DehEggManager {
         Block block = placedLocation.getBlock();
         block.setType(Material.AIR);
 
-        FileConfiguration config = plugin.getConfig();
-
         resetHolderConfig();
         resetPlacerConfig();
     }
@@ -369,6 +367,8 @@ public class DehEggManager {
         config.set(plugin.CFG_BLOCK_Y, loc.getBlockY());
         config.set(plugin.CFG_BLOCK_Z, loc.getBlockZ());
         plugin.saveConfig();
+
+        placedLocation = loc;
     }
 
     public void clearEggBlockLocation() {

@@ -303,6 +303,13 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             return;
         }
 
+        String playerUUIDStr = player.getUniqueId().toString();
+        String placerUUIDStr = getConfig().getString(CFG_PLACER_UUID);
+        if (playerUUIDStr.equals(placerUUIDStr)) {
+            sendMessage(player, "You cannot pick up The Artifact again.", NamedTextColor.RED);
+            return;
+        }
+
         Location blockLocation = clickedBlock.getLocation();
         clickedBlock.setType(Material.AIR);
 
