@@ -11,6 +11,7 @@ import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.EventHandler;
@@ -20,11 +21,7 @@ import org.bukkit.event.entity.*;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
-import org.bukkit.event.player.PlayerDropItemEvent;
-import org.bukkit.event.player.PlayerInteractEntityEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
@@ -55,6 +52,10 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     public final String CFG_HOLDER_TIME = "egg_holder.time";
     public final String CFG_PLACER_UUID = "egg_placer.uuid";
 
+    public final String CFG_OFFLINE_PLAYERS = "offline_players";
+
+    public List<String> offlinePlayers;
+
     private DehEggManager eggManager;
     private DehCommandManager commandManager;
     private DehLeaderboard leaderboard;
@@ -75,11 +76,49 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         commandManager.setEggManager(eggManager);
         commandManager.setLeaderboard(leaderboard);
 
-
         saveDefaultConfig();
         eggManager.loadSpawnLocation();
 
         server.getPluginManager().registerEvents(this, this);
+
+        offlinePlayers = getConfig().getStringList(CFG_OFFLINE_PLAYERS);
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        FileConfiguration config = getConfig();
+
+        Player player = event.getPlayer();
+        UUID playerUUID = player.getUniqueId();
+
+        if (offlinePlayers.contains(playerUUID.toString())) {
+            eggManager.stripEgg(player);
+            offlinePlayers.remove(playerUUID.toString());
+            config.set(CFG_OFFLINE_PLAYERS, offlinePlayers);
+            saveConfig();
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        FileConfiguration config = getConfig();
+
+        String configUUID = config.getString(CFG_HOLDER_UUID);
+
+        if (configUUID == null) {
+            return;
+        }
+
+        UUID holderUUID = UUID.fromString(configUUID);
+
+        Player player = event.getPlayer();
+        UUID playerUUID = player.getUniqueId();
+
+        if (playerUUID.equals(holderUUID)) {
+            offlinePlayers.add(playerUUID.toString());
+            config.set(CFG_OFFLINE_PLAYERS, offlinePlayers);
+            saveConfig();
+        }
     }
 
     @EventHandler

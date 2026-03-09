@@ -29,7 +29,7 @@ public class DehEggManager {
 
     public final Map<UUID, Long> pickupTimes = new HashMap<>();
 
-    private final Duration maxHoldTime = Duration.ofMinutes(1);
+    private final Duration maxHoldTime = Duration.ofSeconds(15);
 
     public DehEggManager(DragonEggHunt plugin) {
         this.plugin = plugin;
@@ -111,6 +111,8 @@ public class DehEggManager {
         config.set(plugin.CFG_HOLDER_UUID, playerUUID.toString());
         config.set(plugin.CFG_HOLDER_TIME, System.currentTimeMillis());
 
+        resetPlacerConfig();
+
         leaderboard.incrementStat(playerUUID, "captures");
     }
 
@@ -135,6 +137,13 @@ public class DehEggManager {
         config.set(plugin.CFG_HOLDER_UUID, null);
         config.set(plugin.CFG_HOLDER_TIME, null);
     }
+
+    private void resetPlacerConfig() {
+        FileConfiguration config = plugin.getConfig();
+
+        config.set(plugin.CFG_PLACER_UUID, null);
+    }
+
 
     public void onEggPlaced(Player player, Location location) {
         FileConfiguration config = plugin.getConfig();
@@ -198,7 +207,7 @@ public class DehEggManager {
         }
     }
 
-    private void stripEgg(Player p)
+    public void stripEgg(Player p)
     {
         for (ItemStack item : p.getInventory().getContents()) {
             if (item == null || !isSpecialEgg(item)) {
@@ -226,6 +235,7 @@ public class DehEggManager {
         FileConfiguration config = plugin.getConfig();
 
         resetHolderConfig();
+        resetPlacerConfig();
     }
 
     public void respawnEgg() {
