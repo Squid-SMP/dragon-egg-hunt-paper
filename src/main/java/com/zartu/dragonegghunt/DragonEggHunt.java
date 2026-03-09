@@ -229,7 +229,13 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     @EventHandler
     public void onEntityDamage(EntityDamageEvent event) {
         Entity entity = event.getEntity();
-        if (entity instanceof Item itemEntity && eggManager.isSpecialEgg(itemEntity.getItemStack())) {
+        if (entity instanceof Item itemEntity) {
+            ItemStack itemStack = itemEntity.getItemStack();
+
+            if (!eggManager.isSpecialEgg(itemStack)) {
+                return;
+            }
+
             DamageCause damageCause = event.getCause();
             switch (damageCause) {
                 case DamageCause.LAVA :
@@ -241,7 +247,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
                     event.setCancelled(true);
                     itemEntity.remove();
                     eggManager.respawnEgg();
-                    broadcast( "The Artifact was destroyed by elements and has respawned!", NamedTextColor.RED);
+                    broadcast("The Artifact was destroyed by elements and has respawned!", NamedTextColor.RED);
                     break;
             }
         }
@@ -268,6 +274,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         if (event.getEntity() instanceof Player p && eggManager.isSpecialEgg(event.getItem().getItemStack())) {
             sendMessage(p,"You have seized the Artifact! Keep it safe!", NamedTextColor.GREEN);
             broadcast("⚠ The Artifact has been picked up! ⚠", NamedTextColor.DARK_RED);
+
             pickupTimes.put(p.getUniqueId(), System.currentTimeMillis());
             leaderboard.incrementStat(p.getUniqueId(), "captures");
         }
@@ -278,7 +285,9 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         if (eggManager.isSpecialEgg(event.getItemInHand())) {
             event.setCancelled(false);
             event.setBuild(true);
+
             eggManager.saveEggBlockLocation(event.getBlock().getLocation());
+
             sendMessage(event.getPlayer(), "The Artifact is secured. Tracking active.", NamedTextColor.GOLD);
             broadcast("The Artifact has been placed in the world!", NamedTextColor.GOLD);
         }
