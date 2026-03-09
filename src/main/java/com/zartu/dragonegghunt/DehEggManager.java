@@ -14,7 +14,10 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.Collection;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class DehEggManager {
     public NamespacedKey eggKey;
@@ -24,6 +27,10 @@ public class DehEggManager {
     private final DragonEggHunt plugin;
     private DehLeaderboard leaderboard;
 
+    public final Map<UUID, Long> pickupTimes = new HashMap<>();
+
+    private final Duration maxHoldTime = Duration.ofMinutes(1);
+
     public DehEggManager(DragonEggHunt plugin) {
         this.plugin = plugin;
         eggKey = new NamespacedKey(plugin, "ctf_dragon_egg");
@@ -31,7 +38,7 @@ public class DehEggManager {
         BukkitRunnable runnable = new BukkitRunnable() {
             @Override
             public void run() {
-                checkRules();
+                update();
             }
         };
 
@@ -42,85 +49,101 @@ public class DehEggManager {
         this.leaderboard = leaderboard;
     }
 
-    private void checkRules() {
-        long maxHoldTime = 1000 * 60 * 30;
-
-        FileConfiguration config = plugin.getConfig();
-
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            boolean hasEgg = false;
-
-            for (ItemStack item : p.getInventory().getContents()) {
-                if (isSpecialEgg(item)) {
-                    hasEgg = true;
-                    leaderboard.incrementStat(p.getUniqueId(), "time_held");
-
-                    if (p.getLocation().getY() < -64) {
-                        p.getInventory().remove(item);
-                        respawnEgg();
-
-                        plugin.broadcast("The Artifact fell into the void and has returned to its shrine!", NamedTextColor.RED);
-
-                        plugin.pickupTimes.remove(p.getUniqueId());
-                        return;
-                    }
-
-                    plugin.pickupTimes.putIfAbsent(p.getUniqueId(), System.currentTimeMillis());
-                    Long pickedUpAt = plugin.pickupTimes.get(p.getUniqueId());
-
-                    if (pickedUpAt != null) {
-                        long timeHeld = System.currentTimeMillis() - pickedUpAt;
-                        if (timeHeld > maxHoldTime) {
-                            p.getInventory().remove(item);
-                            respawnEgg();
-                            plugin.broadcast("The Artifact became too unstable to hold and teleported away!", NamedTextColor.DARK_PURPLE);
-                            plugin.pickupTimes.remove(p.getUniqueId());
-                        }
-                    }
-                }
-            }
-            if (!hasEgg) {
-                plugin.pickupTimes.remove(p.getUniqueId());
-            }
-        }
-
-        for (World w : Bukkit.getWorlds()) {
-            for (Item itemEntity : w.getEntitiesByClass(Item.class)) {
-                if (isSpecialEgg(itemEntity.getItemStack())) {
-                    if (itemEntity.getLocation().getY() < -64) {
-                        itemEntity.remove();
-                        respawnEgg();
-                        plugin.broadcast("The Artifact fell into the void and has returned to its shrine!", NamedTextColor.RED);
-                    }
-                }
-            }
-        }
+    private void update() {
+        checkHolder();
+        checkPlacer();
     }
 
-    public void setSpawnLocation(Location loc)  {
+    private void checkHolder() {
+        FileConfiguration config = plugin.getConfig();
 
-        Location spawnLoc = loc.toBlockLocation();
+        String configUUID = config.getString(plugin.CFG_HOLDER_UUID);
 
-        World spawnWorld = spawnLoc.getWorld();
-
-        if (spawnWorld == null) {
+        if (configUUID == null) {
             return;
         }
 
+        long pickedUpTime = config.getLong(plugin.CFG_HOLDER_TIME);
+
+        if (pickedUpTime == 0) {
+            return;
+        }
+
+        long timeHeld = System.currentTimeMillis() - pickedUpTime;
+        if (timeHeld >= maxHoldTime.toMillis()) {
+            UUID holderUUID = UUID.fromString(configUUID);
+            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(holderUUID);
+            Player player = offlinePlayer.getPlayer();
+
+            if (player != null) {
+                stripEgg(player);
+            }
+
+            respawnEgg();
+
+            plugin.broadcast("The Artifact became too unstable to hold and has returned to its shrine!", NamedTextColor.DARK_PURPLE);
+        }
+    }
+
+    private void checkPlacer() {
         FileConfiguration config = plugin.getConfig();
 
-        double x = spawnLoc.getX();
-        double y = spawnLoc.getY();
-        double z = spawnLoc.getZ();
+        String configUUID = config.getString(plugin.CFG_PLACER_UUID);
 
-        config.set(plugin.CFG_SPAWN_WORLD, spawnWorld.getName());
-        config.set(plugin.CFG_SPAWN_X, x);
-        config.set(plugin.CFG_SPAWN_Y, y);
-        config.set(plugin.CFG_SPAWN_Z, z);
+        if (configUUID == null) {
+            return;
+        }
 
-        plugin.saveConfig();
+        UUID placerUUID = UUID.fromString(configUUID);
+        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(placerUUID);
+        Player player = offlinePlayer.getPlayer();
 
-        spawnLocation = spawnLoc;
+        if (player != null) {
+            leaderboard.incrementStat(placerUUID, "time_held");
+        }
+    }
+
+    public void onEggPickedUp(Player player) {
+        FileConfiguration config = plugin.getConfig();
+
+        UUID playerUUID = player.getUniqueId();
+
+        config.set(plugin.CFG_HOLDER_UUID, playerUUID.toString());
+        config.set(plugin.CFG_HOLDER_TIME, System.currentTimeMillis());
+
+        leaderboard.incrementStat(playerUUID, "captures");
+    }
+
+    public void onEggRemoved(Player player) {
+        FileConfiguration config = plugin.getConfig();
+
+        String configUUID = config.getString(plugin.CFG_HOLDER_UUID);
+
+        if (configUUID == null) {
+            return;
+        }
+
+        String playerUUIDStr = player.getUniqueId().toString();
+        if (configUUID.equals(playerUUIDStr)) {
+            resetHolderConfig();
+        }
+    }
+
+    private void resetHolderConfig() {
+        FileConfiguration config = plugin.getConfig();
+
+        config.set(plugin.CFG_HOLDER_UUID, null);
+        config.set(plugin.CFG_HOLDER_TIME, null);
+    }
+
+    public void onEggPlaced(Player player, Location location) {
+        FileConfiguration config = plugin.getConfig();
+
+        saveEggBlockLocation(location);
+
+        resetHolderConfig();
+
+        config.set(plugin.CFG_PLACER_UUID, player.getUniqueId().toString());
     }
 
     // --- Special Egg Handling ---
@@ -153,16 +176,26 @@ public class DehEggManager {
     }
 
     public void resetEgg(Player p) {
-        Collection<? extends Player> players = Bukkit.getOnlinePlayers();
-        for (Player player : players) {
-            stripEgg(player);
-        }
+        stripAllPlayers();
 
         deleteEggInWorld();
 
         ItemStack egg = createSpecialEgg();
         p.getInventory().addItem(egg);
         plugin.sendMessage(p, "Received Artifact.", NamedTextColor.WHITE);
+    }
+
+    private void stripAllPlayers() {
+        OfflinePlayer[] offlinePlayers = Bukkit.getOfflinePlayers();
+        for (OfflinePlayer offlinePlayer : offlinePlayers) {
+            Player player = offlinePlayer.getPlayer();
+
+            if (player == null) {
+                continue;
+            }
+
+            stripEgg(player);
+        }
     }
 
     private void stripEgg(Player p)
@@ -173,6 +206,8 @@ public class DehEggManager {
             }
 
             p.getInventory().remove(item);
+            onEggRemoved(p);
+            break;
         }
     }
 
@@ -187,6 +222,10 @@ public class DehEggManager {
 
         Block block = placedLocation.getBlock();
         block.setType(Material.AIR);
+
+        FileConfiguration config = plugin.getConfig();
+
+        resetHolderConfig();
     }
 
     public void respawnEgg() {
@@ -210,6 +249,15 @@ public class DehEggManager {
         block.setType(Material.DRAGON_EGG, false);
 
         saveEggBlockLocation(spawnLocation);
+
+        FileConfiguration config = plugin.getConfig();
+
+        resetHolderConfig();
+    }
+
+    public void stripAndRespawnEgg(Player p) {
+        stripEgg(p);
+        respawnEgg();
     }
 
     // --- Tracking ---
@@ -275,10 +323,31 @@ public class DehEggManager {
         plugin.sendMessage(tracker, "Search Area: Z[" + (cZ - radius) + " : " + (cZ + radius) + "]", NamedTextColor.YELLOW);
     }
 
-    public void stripAndRespawnEgg(Player p) {
-        stripEgg(p);
-        respawnEgg();
-        plugin.broadcast("The Artifact has disintegrated and has returned to its Shrine!", NamedTextColor.RED);
+    // --- Location Management ---
+
+    public void setSpawnLocation(Location loc)  {
+        Location spawnLoc = loc.toBlockLocation();
+
+        World spawnWorld = spawnLoc.getWorld();
+
+        if (spawnWorld == null) {
+            return;
+        }
+
+        FileConfiguration config = plugin.getConfig();
+
+        double x = spawnLoc.getX();
+        double y = spawnLoc.getY();
+        double z = spawnLoc.getZ();
+
+        config.set(plugin.CFG_SPAWN_WORLD, spawnWorld.getName());
+        config.set(plugin.CFG_SPAWN_X, x);
+        config.set(plugin.CFG_SPAWN_Y, y);
+        config.set(plugin.CFG_SPAWN_Z, z);
+
+        plugin.saveConfig();
+
+        spawnLocation = spawnLoc;
     }
 
     public void saveEggBlockLocation(Location loc) {
@@ -311,8 +380,6 @@ public class DehEggManager {
                 loc.getBlockY() == config.getInt(plugin.CFG_BLOCK_Y) &&
                 loc.getBlockZ() == config.getInt(plugin.CFG_BLOCK_Z);
     }
-
-    // --- Location Loaders ---
 
     public void loadSpawnLocation() {
         FileConfiguration config = plugin.getConfig();

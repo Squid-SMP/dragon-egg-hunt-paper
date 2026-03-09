@@ -25,6 +25,7 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -50,7 +51,9 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     public final String CFG_BLOCK_Y = "placed_egg.y";
     public final String CFG_BLOCK_Z = "placed_egg.z";
 
-    public final Map<UUID, Long> pickupTimes = new HashMap<>();
+    public final String CFG_HOLDER_UUID = "egg_holder.uuid";
+    public final String CFG_HOLDER_TIME = "egg_holder.time";
+    public final String CFG_PLACER_UUID = "egg_placer.uuid";
 
     private DehEggManager eggManager;
     private DehCommandManager commandManager;
@@ -107,7 +110,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
         if (respawnEgg) {
             eggManager.respawnEgg();
-            broadcast("The Artifact has disintegrated and has returned to its Shrine!", NamedTextColor.RED);
+            broadcast("The Artifact has disintegrated and has returned to its shrine!", NamedTextColor.DARK_PURPLE);
         }
     }
 
@@ -144,6 +147,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             case World.Environment.NETHER:
                 eggManager.stripAndRespawnEgg(p);
                 sendMessage(p, "The Artifact cannot enter another dimension!", NamedTextColor.RED);
+                broadcast("The Artifact has disintegrated and has returned to its shrine!", NamedTextColor.DARK_PURPLE);
                 break;
         }
     }
@@ -186,7 +190,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
         eggManager.respawnEgg();
 
-        broadcast("The Artifact was dropped and has returned to its shrine!", NamedTextColor.RED);
+        broadcast("The Artifact was dropped and has returned to its shrine!", NamedTextColor.DARK_PURPLE);
     }
 
     @EventHandler
@@ -222,56 +226,14 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         }
     }
 
-    @EventHandler
-    public void onEntityDamage(EntityDamageEvent event) {
-        Entity entity = event.getEntity();
-        if (entity instanceof Item itemEntity) {
-            ItemStack itemStack = itemEntity.getItemStack();
-
-            if (!eggManager.isSpecialEgg(itemStack)) {
-                return;
-            }
-
-            DamageCause damageCause = event.getCause();
-            switch (damageCause) {
-                case DamageCause.LAVA :
-                case DamageCause.FIRE :
-                case DamageCause.FIRE_TICK :
-                case DamageCause.BLOCK_EXPLOSION :
-                case DamageCause.ENTITY_EXPLOSION :
-                case DamageCause.VOID :
-                    event.setCancelled(true);
-                    itemEntity.remove();
-                    eggManager.respawnEgg();
-                    broadcast("The Artifact was destroyed by elements and has respawned!", NamedTextColor.RED);
-                    break;
-            }
-        }
-    }
-
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        Player p = event.getPlayer();
-        pickupTimes.remove(p.getUniqueId());
-        for (ItemStack item : p.getInventory().getContents()) {
-            if (item == null || !eggManager.isSpecialEgg(item)) {
-                continue;
-            }
-            p.getInventory().remove(item);
-
-            eggManager.respawnEgg();
-
-            broadcast("The Artifact has respawned because the holder fled the world!", NamedTextColor.YELLOW);
-        }
-    }
-
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockPlace(BlockPlaceEvent event) {
         ItemStack itemInHand = event.getItemInHand();
         if (eggManager.isSpecialEgg(itemInHand)) {
             Location location = event.getBlock().getLocation();
+            Player player = event.getPlayer();
+
             if (location.getY() <= MIN_HEIGHT) {
-                Player player = event.getPlayer();
                 sendMessage(player, "The Artifact cannot be placed below sea level!", NamedTextColor.RED);
                 event.setCancelled(true);
                 return;
@@ -280,7 +242,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             event.setCancelled(false);
             event.setBuild(true);
 
-            eggManager.saveEggBlockLocation(event.getBlock().getLocation());
+            eggManager.onEggPlaced(player, location);
 
             sendMessage(event.getPlayer(), "The Artifact is secured. Tracking active.", NamedTextColor.GOLD);
             broadcast("The Artifact has been placed in the world!", NamedTextColor.GOLD);
@@ -311,6 +273,8 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
             eggManager.clearEggBlockLocation();
             broadcast("⚠ The Artifact has been stolen! ⚠", NamedTextColor.DARK_RED);
+
+            eggManager.onEggPickedUp(player);
         }
         else {
             ItemStack egg = new ItemStack(Material.DRAGON_EGG);
@@ -334,7 +298,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
                 blockList.remove(block);
                 block.setType(Material.AIR);
                 eggManager.respawnEgg();
-                broadcast("The Artifact was destroyed by an explosion and has respawned!", NamedTextColor.RED);
+                broadcast("The Artifact was destroyed and has returned to its shrine!", NamedTextColor.DARK_PURPLE);
                 return;
             }
         }
@@ -356,6 +320,17 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         if (event.getChangedType() == Material.DRAGON_EGG) {
             event.setCancelled(true);
         }
+    }
+
+    @EventHandler
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        List<ItemStack> drops = event.getDrops();
+
+        drops.removeIf(item -> item != null && eggManager.isSpecialEgg(item));
+
+        eggManager.respawnEgg();
+
+        broadcast("The Artifact was lost and has returned to its shrine!", NamedTextColor.DARK_PURPLE);
     }
 
     @Override
