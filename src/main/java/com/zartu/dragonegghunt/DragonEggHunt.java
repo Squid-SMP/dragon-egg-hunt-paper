@@ -10,10 +10,7 @@ import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.FallingBlock;
-import org.bukkit.entity.Item;
-import org.bukkit.entity.ItemFrame;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -23,6 +20,7 @@ import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.entity.ItemDespawnEvent;
@@ -87,67 +85,83 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
     @EventHandler
     public void onEntityPortal(EntityPortalEvent event) {
-        if (event.getEntity() instanceof Item item) {
-            if (eggManager.isSpecialEgg(item.getItemStack())) {
-                event.setCancelled(true);
-                item.remove();
-                eggManager.respawnEgg();
-                broadcast("The Artifact has disintegrated and has returned to its Shrine!", NamedTextColor.RED);
+        boolean respawnEgg = false;
+        Entity entity = event.getEntity();
+
+        if (entity instanceof Item item) {
+            ItemStack itemStack = item.getItemStack();
+            if (!eggManager.isSpecialEgg(itemStack)) {
+                return;
             }
-        } else if (event.getEntity() instanceof FallingBlock fb) {
-            if (fb.getBlockData().getMaterial() == Material.DRAGON_EGG) {
-                event.setCancelled(true);
-                fb.remove();
-                eggManager.respawnEgg();
-                broadcast("The Artifact has disintegrated and has returned to its Shrine!", NamedTextColor.RED);
+
+            event.setCancelled(true);
+            item.remove();
+
+            respawnEgg = true;
+        }
+        else if (entity instanceof FallingBlock fallingBlock) {
+            if (fallingBlock.getBlockData().getMaterial() != Material.DRAGON_EGG) {
+                return;
             }
+
+            event.setCancelled(true);
+            fallingBlock.remove();
+            respawnEgg = true;
+        }
+
+        if (respawnEgg) {
+            eggManager.respawnEgg();
+            broadcast("The Artifact has disintegrated and has returned to its Shrine!", NamedTextColor.RED);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onDimensionJump(PlayerTeleportEvent event) {
         Location to = event.getTo();
+        World toWorld = to.getWorld();
         Location from = event.getFrom();
-        if (to.getWorld() == null || from.getWorld() == null) {
-            return;
+        World fromWorld = from.getWorld();
 
-        }
-        if (from.getWorld().equals(to.getWorld())) {
+        if (toWorld == null || fromWorld == null || fromWorld.equals(toWorld)) {
             return;
         }
 
         Player p = event.getPlayer();
         boolean hasEgg = false;
 
-        for (ItemStack item : p.getInventory().getContents()) {
+        ItemStack[] inventoryContent = p.getInventory().getContents();
+        for (ItemStack item : inventoryContent) {
             if (eggManager.isSpecialEgg(item)) {
                 hasEgg = true;
                 break;
             }
         }
 
-        if (hasEgg) {
-            World.Environment toEnv = to.getWorld().getEnvironment();
+        if (!hasEgg) {
+            return;
+        }
 
-            switch (toEnv) {
-                case World.Environment.THE_END:
-                    eggManager.stripAndRespawnEgg(p);
-                    sendMessage(p, "The Artifact cannot enter The End!", NamedTextColor.RED);
-                    break;
-                case World.Environment.NETHER:
-                    eggManager.stripAndRespawnEgg(p);
-                    sendMessage(p, "The Artifact cannot enter The Nether!", NamedTextColor.RED);
-            }
+        World.Environment toEnv = toWorld.getEnvironment();
+
+        switch (toEnv) {
+            case World.Environment.THE_END:
+            case World.Environment.NETHER:
+                eggManager.stripAndRespawnEgg(p);
+                sendMessage(p, "The Artifact cannot enter another dimension!", NamedTextColor.RED);
+                break;
         }
     }
 
     @EventHandler
     public void onItemFrameInteract(PlayerInteractEntityEvent event) {
-        if (event.getRightClicked() instanceof ItemFrame) {
-            ItemStack hand = event.getPlayer().getInventory().getItem(event.getHand());
-            if (eggManager.isSpecialEgg(hand)) {
+        Entity rightClickedEntity = event.getRightClicked();
+        if (rightClickedEntity instanceof ItemFrame) {
+            Player player = event.getPlayer();
+            ItemStack itemInHand = player.getInventory().getItem(event.getHand());
+
+            if (eggManager.isSpecialEgg(itemInHand)) {
                 event.setCancelled(true);
-                sendMessage(event.getPlayer(), "The Artifact cannot be framed!", NamedTextColor.RED);
+                sendMessage(player, "The Artifact cannot be framed!", NamedTextColor.RED);
             }
         }
     }
@@ -180,16 +194,6 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     }
 
     @EventHandler
-    public void onHopperPickup(InventoryPickupItemEvent event) {
-        if (eggManager.isSpecialEgg(event.getItem().getItemStack())) event.setCancelled(true);
-    }
-
-    @EventHandler
-    public void onHopperMove(InventoryMoveItemEvent event) {
-        if (eggManager.isSpecialEgg(event.getItem())) event.setCancelled(true);
-    }
-
-    @EventHandler
     public void onContainerStore(InventoryClickEvent event) {
         if (event.getClickedInventory() == null) return;
         boolean isContainer = event.getView().getTopInventory().getType() != InventoryType.CRAFTING;
@@ -207,41 +211,38 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     @EventHandler
     public void onPistonPush(BlockPistonExtendEvent event) {
         for (Block b : event.getBlocks()) {
-            if (b.getType() == Material.DRAGON_EGG) event.setCancelled(true);
+            if (b.getType() == Material.DRAGON_EGG) {
+                event.setCancelled(true);
+            }
         }
     }
 
     @EventHandler
     public void onPistonRetract(BlockPistonRetractEvent event) {
         for (Block b : event.getBlocks()) {
-            if (b.getType() == Material.DRAGON_EGG) event.setCancelled(true);
-        }
-    }
-
-    @EventHandler
-    public void onItemDespawn(ItemDespawnEvent event) {
-        if (eggManager.isSpecialEgg(event.getEntity().getItemStack())) {
-            event.setCancelled(true);
-            event.getEntity().remove();
-            eggManager.respawnEgg();
-            broadcast("The Artifact was abandoned and has returned to its shrine!", NamedTextColor.RED);
+            if (b.getType() == Material.DRAGON_EGG) {
+                event.setCancelled(true);
+            }
         }
     }
 
     @EventHandler
     public void onEntityDamage(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Item itemEntity && eggManager.isSpecialEgg(itemEntity.getItemStack())) {
-            if (event.getCause() == EntityDamageEvent.DamageCause.LAVA ||
-                    event.getCause() == EntityDamageEvent.DamageCause.FIRE ||
-                    event.getCause() == EntityDamageEvent.DamageCause.FIRE_TICK ||
-                    event.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION ||
-                    event.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION ||
-                    event.getCause() == EntityDamageEvent.DamageCause.VOID) {
-
-                event.setCancelled(true);
-                itemEntity.remove();
-                eggManager.respawnEgg();
-                broadcast( "The Artifact was destroyed by elements and has respawned!", NamedTextColor.RED);
+        Entity entity = event.getEntity();
+        if (entity instanceof Item itemEntity && eggManager.isSpecialEgg(itemEntity.getItemStack())) {
+            DamageCause damageCause = event.getCause();
+            switch (damageCause) {
+                case DamageCause.LAVA :
+                case DamageCause.FIRE :
+                case DamageCause.FIRE_TICK :
+                case DamageCause.BLOCK_EXPLOSION :
+                case DamageCause.ENTITY_EXPLOSION :
+                case DamageCause.VOID :
+                    event.setCancelled(true);
+                    itemEntity.remove();
+                    eggManager.respawnEgg();
+                    broadcast( "The Artifact was destroyed by elements and has respawned!", NamedTextColor.RED);
+                    break;
             }
         }
     }
@@ -284,40 +285,36 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onBlockBreak(BlockBreakEvent event) {
-        if (event.getBlock().getType() == Material.DRAGON_EGG) {
-            if (eggManager.isSavedEggLocation(event.getBlock().getLocation())) {
-                event.setCancelled(false);
-                event.setDropItems(false);
-                eggManager.clearEggBlockLocation();
-                broadcast( "⚠ The Artifact has been dislodged! ⚠", NamedTextColor.DARK_RED);
-            }
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
     public void onEggInteract(PlayerInteractEvent event) {
-        if (event.getClickedBlock() != null && event.getClickedBlock().getType() == Material.DRAGON_EGG) {
-            event.setCancelled(true);
-            if (event.getAction().toString().contains("LEFT_CLICK")) {
-                if (eggManager.isSavedEggLocation(event.getClickedBlock().getLocation())) {
-                    event.getClickedBlock().setType(Material.AIR);
-                    Item dropped = event.getClickedBlock().getWorld().dropItemNaturally(
-                            event.getClickedBlock().getLocation(),
-                            eggManager.createSpecialEgg()
-                    );
+        Block clickedBlock = event.getClickedBlock();
 
-                    eggManager.clearEggBlockLocation();
-                    broadcast("⚠ The Artifact has been stolen! ⚠", NamedTextColor.DARK_RED);
-                }
-            }
+        if (clickedBlock == null || clickedBlock.getType() != Material.DRAGON_EGG) {
+            return;
+        }
+
+        event.setCancelled(true);
+
+        if (!event.getAction().toString().contains("LEFT_CLICK")) {
+            return;
+        }
+
+        Location blockLocation = clickedBlock.getLocation();
+        if (eggManager.isSavedEggLocation(blockLocation)) {
+            clickedBlock.setType(Material.AIR);
+            Item dropped = clickedBlock.getWorld().dropItemNaturally(
+                    clickedBlock.getLocation(),
+                    eggManager.createSpecialEgg()
+            );
+
+            eggManager.clearEggBlockLocation();
+            broadcast("⚠ The Artifact has been stolen! ⚠", NamedTextColor.DARK_RED);
         }
     }
 
     @EventHandler
     public void onFallingBlockLand(EntityChangeBlockEvent event) {
-        if (event.getEntity() instanceof FallingBlock) {
-            if (((FallingBlock) event.getEntity()).getBlockData().getMaterial() == Material.DRAGON_EGG) {
+        if (event.getEntity() instanceof FallingBlock fallingBlock) {
+            if (fallingBlock.getBlockData().getMaterial() == Material.DRAGON_EGG) {
                 eggManager.saveEggBlockLocation(event.getBlock().getLocation());
             }
         }
