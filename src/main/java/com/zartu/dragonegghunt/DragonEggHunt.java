@@ -38,7 +38,7 @@ import java.util.logging.Logger;
 
 public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecutor {
 
-    public final Map<UUID, Long> pickupTimes = new HashMap<>();
+    public final int MIN_HEIGHT = 62;
 
     public final String CFG_SPAWN_WORLD = "spawn.world";
     public final String CFG_SPAWN_X = "spawn.x";
@@ -49,6 +49,8 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     public final String CFG_BLOCK_X = "placed_egg.x";
     public final String CFG_BLOCK_Y = "placed_egg.y";
     public final String CFG_BLOCK_Z = "placed_egg.z";
+
+    public final Map<UUID, Long> pickupTimes = new HashMap<>();
 
     private DehEggManager eggManager;
     private DehCommandManager commandManager;
@@ -265,7 +267,16 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockPlace(BlockPlaceEvent event) {
-        if (eggManager.isSpecialEgg(event.getItemInHand())) {
+        ItemStack itemInHand = event.getItemInHand();
+        if (eggManager.isSpecialEgg(itemInHand)) {
+            Location location = event.getBlock().getLocation();
+            if (location.getY() <= MIN_HEIGHT) {
+                Player player = event.getPlayer();
+                sendMessage(player, "The Artifact cannot be placed below sea level!", NamedTextColor.RED);
+                event.setCancelled(true);
+                return;
+            }
+
             event.setCancelled(false);
             event.setBuild(true);
 
