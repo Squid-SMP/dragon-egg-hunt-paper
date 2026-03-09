@@ -176,7 +176,7 @@ public class DehEggManager {
         }
     }
 
-    private void deleteEggInWorld()  {
+    public void deleteEggInWorld()  {
         if (placedLocation == null) {
             loadPlacedLocation();
         }

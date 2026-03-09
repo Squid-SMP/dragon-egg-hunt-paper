@@ -1,5 +1,6 @@
 package com.zartu.dragonegghunt;
 
+import com.destroystokyo.paper.event.block.BlockDestroyEvent;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -14,19 +15,13 @@ import org.bukkit.entity.*;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPistonExtendEvent;
-import org.bukkit.event.block.BlockPistonRetractEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.*;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
-import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityPortalEvent;
-import org.bukkit.event.entity.ItemDespawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryMoveItemEvent;
-import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -34,10 +29,12 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -269,17 +266,6 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         }
     }
 
-    @EventHandler
-    public void onPlayerPickup(EntityPickupItemEvent event) {
-        if (event.getEntity() instanceof Player p && eggManager.isSpecialEgg(event.getItem().getItemStack())) {
-            sendMessage(p,"You have seized the Artifact! Keep it safe!", NamedTextColor.GREEN);
-            broadcast("⚠ The Artifact has been picked up! ⚠", NamedTextColor.DARK_RED);
-
-            pickupTimes.put(p.getUniqueId(), System.currentTimeMillis());
-            leaderboard.incrementStat(p.getUniqueId(), "captures");
-        }
-    }
-
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockPlace(BlockPlaceEvent event) {
         if (eggManager.isSpecialEgg(event.getItemInHand())) {
@@ -296,6 +282,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onEggInteract(PlayerInteractEvent event) {
         Block clickedBlock = event.getClickedBlock();
+        Player player = event.getPlayer();
 
         if (clickedBlock == null || clickedBlock.getType() != Material.DRAGON_EGG) {
             return;
@@ -310,13 +297,34 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         Location blockLocation = clickedBlock.getLocation();
         if (eggManager.isSavedEggLocation(blockLocation)) {
             clickedBlock.setType(Material.AIR);
-            Item dropped = clickedBlock.getWorld().dropItemNaturally(
-                    clickedBlock.getLocation(),
-                    eggManager.createSpecialEgg()
-            );
+
+            ItemStack item = eggManager.createSpecialEgg();
+            forceIntoMainHand(player, item);
 
             eggManager.clearEggBlockLocation();
             broadcast("⚠ The Artifact has been stolen! ⚠", NamedTextColor.DARK_RED);
+        }
+    }
+
+    @EventHandler
+    public void onEntityExplode(EntityExplodeEvent event) {
+        handleExplosion(event.blockList());
+    }
+
+    @EventHandler
+    public void onBlockExplode(BlockExplodeEvent event) {
+        handleExplosion(event.blockList());
+    }
+
+    private void handleExplosion(List<Block> blockList) {
+        for (Block block : blockList) {
+            if (block.getType() == Material.DRAGON_EGG) {
+                blockList.remove(block);
+                block.setType(Material.AIR);
+                eggManager.respawnEgg();
+                broadcast("The Artifact was destroyed by an explosion and has respawned!", NamedTextColor.RED);
+                return;
+            }
         }
     }
 
@@ -342,5 +350,19 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     public void sendMessage(Audience audience, String text, TextColor color) {
         TextComponent textComponent = Component.text(text).color(color);
         audience.sendMessage(textComponent);
+    }
+
+    public void forceIntoMainHand(Player p, ItemStack itemStack) {
+        PlayerInventory inventory = p.getInventory();
+        ItemStack mainHandItem = inventory.getItemInMainHand();
+        inventory.setItemInMainHand(itemStack);
+
+        int firstEmptyIdx = inventory.firstEmpty();
+        if (firstEmptyIdx != -1) {
+            inventory.addItem(mainHandItem);
+        }
+        else {
+            p.dropItem(mainHandItem);
+        }
     }
 }
