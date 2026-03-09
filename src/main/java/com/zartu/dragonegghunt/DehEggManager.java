@@ -46,17 +46,6 @@ public class DehEggManager {
 
         FileConfiguration config = plugin.getConfig();
 
-        if (config.contains(plugin.CFG_DROP_TIME)) {
-            long dropTime = config.getLong(plugin.CFG_DROP_TIME);
-            long timeOnGround = System.currentTimeMillis() - dropTime;
-            long maxGroundTime = 1000 * 60 * 5;
-
-            if (timeOnGround > maxGroundTime) {
-                forceRecoverAbandonedEgg();
-                plugin.broadcast("The Artifact was abandoned for too long and has returned to its shrine!", NamedTextColor.RED);
-            }
-        }
-
         for (Player p : Bukkit.getOnlinePlayers()) {
             boolean hasEgg = false;
 
@@ -64,7 +53,6 @@ public class DehEggManager {
                 if (isSpecialEgg(item)) {
                     hasEgg = true;
                     leaderboard.incrementStat(p.getUniqueId(), "time_held");
-                    clearDroppedLocation();
 
                     if (p.getLocation().getY() < -64) {
                         p.getInventory().remove(item);
@@ -114,20 +102,24 @@ public class DehEggManager {
 
         World spawnWorld = spawnLoc.getWorld();
 
-        if (spawnWorld != null) {
-            FileConfiguration config = plugin.getConfig();
-
-            double x = spawnLoc.getX();
-            double y = spawnLoc.getY();
-            double z = spawnLoc.getZ();
-
-            config.set(plugin.CFG_SPAWN_WORLD, spawnWorld.getName());
-            config.set(plugin.CFG_SPAWN_X, x);
-            config.set(plugin.CFG_SPAWN_Y, y);
-            config.set(plugin.CFG_SPAWN_Z, z);
-
-            plugin.saveConfig();
+        if (spawnWorld == null) {
+            return;
         }
+
+        FileConfiguration config = plugin.getConfig();
+
+        double x = spawnLoc.getX();
+        double y = spawnLoc.getY();
+        double z = spawnLoc.getZ();
+
+        config.set(plugin.CFG_SPAWN_WORLD, spawnWorld.getName());
+        config.set(plugin.CFG_SPAWN_X, x);
+        config.set(plugin.CFG_SPAWN_Y, y);
+        config.set(plugin.CFG_SPAWN_Z, z);
+
+        plugin.saveConfig();
+
+        spawnLocation = spawnLoc;
     }
 
     // --- Special Egg Handling ---
@@ -200,17 +192,22 @@ public class DehEggManager {
             loadSpawnLocation();
         }
 
-        if (spawnLocation != null && spawnLocation.getWorld() != null) {
-            if (!spawnLocation.getChunk().isLoaded()) {
-                spawnLocation.getChunk().load();
-            }
-
-            Block block = spawnLocation.getBlock();
-            block.setType(Material.DRAGON_EGG, false);
-
-            saveEggBlockLocation(spawnLocation);
-            clearDroppedLocation();
+        if (spawnLocation == null) {
+            return;
         }
+
+        if (spawnLocation.getWorld() == null) {
+            return;
+        }
+
+        if (!spawnLocation.getChunk().isLoaded()) {
+            spawnLocation.getChunk().load();
+        }
+
+        Block block = spawnLocation.getBlock();
+        block.setType(Material.DRAGON_EGG, false);
+
+        saveEggBlockLocation(spawnLocation);
     }
 
     // --- Tracking ---
@@ -240,20 +237,6 @@ public class DehEggManager {
                             config.getInt(plugin.CFG_BLOCK_Y),
                             config.getInt(plugin.CFG_BLOCK_Z));
                     status = "Secured in World";
-                }
-            }
-        }
-
-        if (target == null && config.contains(plugin.CFG_DROP_WORLD)) {
-            String wName = config.getString(plugin.CFG_DROP_WORLD);
-            if (wName != null) {
-                World w = Bukkit.getWorld(wName);
-                if (w != null) {
-                    target = new Location(w,
-                            config.getDouble(plugin.CFG_DROP_X),
-                            config.getDouble(plugin.CFG_DROP_Y),
-                            config.getDouble(plugin.CFG_DROP_Z));
-                    status = "Dropped (Signal Weak)";
                 }
             }
         }
@@ -296,23 +279,6 @@ public class DehEggManager {
         plugin.broadcast("The Artifact has disintegrated and has returned to its Shrine!", NamedTextColor.RED);
     }
 
-    public void stripAndDropEgg(Player p, Location dropLoc) {
-        if (dropLoc.getWorld() == null) return;
-
-        for (ItemStack item : p.getInventory().getContents()) {
-            if (isSpecialEgg(item)) {
-                p.getInventory().remove(item);
-                Item dropped = dropLoc.getWorld().dropItemNaturally(dropLoc, item);
-                saveDroppedLocation(dropped);
-            }
-        }
-
-        String worldName = plugin.getConfig().getString(plugin.CFG_SPAWN_WORLD);
-
-        p.sendMessage(NamedTextColor.RED + "The Artifact is tethered to the " + worldName + " dimension!");
-        plugin.broadcast("The Artifact was dropped as " + p.getName() + " tried to leave the world!", NamedTextColor.YELLOW);
-    }
-
     public void saveEggBlockLocation(Location loc) {
         FileConfiguration config = plugin.getConfig();
 
@@ -342,57 +308,6 @@ public class DehEggManager {
                 loc.getBlockX() == config.getInt(plugin.CFG_BLOCK_X) &&
                 loc.getBlockY() == config.getInt(plugin.CFG_BLOCK_Y) &&
                 loc.getBlockZ() == config.getInt(plugin.CFG_BLOCK_Z);
-    }
-
-    public void saveDroppedLocation(Item item) {
-        FileConfiguration config = plugin.getConfig();
-
-        Location loc = item.getLocation();
-        if (loc.getWorld() == null) return;
-        config.set(plugin.CFG_DROP_WORLD, loc.getWorld().getName());
-        config.set(plugin.CFG_DROP_X, loc.getX());
-        config.set(plugin.CFG_DROP_Y, loc.getY());
-        config.set(plugin.CFG_DROP_Z, loc.getZ());
-        config.set(plugin.CFG_DROP_TIME, System.currentTimeMillis());
-        config.set(plugin.CFG_DROP_UUID, item.getUniqueId().toString());
-        plugin.saveConfig();
-    }
-
-    public void clearDroppedLocation() {
-        plugin.getConfig().set("dropped_egg", null);
-        plugin.saveConfig();
-    }
-
-    private void forceRecoverAbandonedEgg() {
-        FileConfiguration config = plugin.getConfig();
-
-        if (!config.contains(plugin.CFG_DROP_WORLD)) return;
-
-        String wName = config.getString(plugin.CFG_DROP_WORLD);
-        if (wName == null) return;
-        World w = Bukkit.getWorld(wName);
-        if (w == null) return;
-
-        double x = config.getDouble(plugin.CFG_DROP_X);
-        double y = config.getDouble(plugin.CFG_DROP_Y);
-        double z = config.getDouble(plugin.CFG_DROP_Z);
-        Location dropLoc = new Location(w, x, y, z);
-
-        Chunk chunk = dropLoc.getChunk();
-        if (!chunk.isLoaded()) {
-            chunk.load();
-        }
-
-        String uuidStr = config.getString(plugin.CFG_DROP_UUID);
-        if (uuidStr != null) {
-            try {
-                Entity e = Bukkit.getEntity(UUID.fromString(uuidStr));
-                if (e != null) e.remove();
-            } catch (Exception ignored) {}
-        }
-
-        clearDroppedLocation();
-        respawnEgg();
     }
 
     // --- Location Loaders ---

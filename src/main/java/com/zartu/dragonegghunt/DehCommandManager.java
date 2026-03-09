@@ -13,6 +13,7 @@ public class DehCommandManager {
     public final String CMD_SET_SPAWN = "eggsetspawn";
     public final String CMD_RESET = "eggreset";
     public final String CMD_LEADERBOARD = "eggleaderboard";
+    public final String CMD_LOCATION = "egglocation";
 
     private final DragonEggHunt plugin;
     private DehEggManager eggManager;
@@ -25,6 +26,7 @@ public class DehCommandManager {
         registerCommand(CMD_SET_SPAWN);
         registerCommand(CMD_RESET);
         registerCommand(CMD_LEADERBOARD);
+        registerCommand(CMD_LOCATION);
     }
 
     public void setEggManager(DehEggManager eggManager) {
@@ -40,7 +42,7 @@ public class DehCommandManager {
         if (command != null) {
             command.setExecutor(plugin);
         } else {
-            plugin.getLogger().warning("Command '" + name + "' is missing from plugin.yml!");
+            plugin.log.warning("Command '" + name + "' is missing from plugin.yml!");
         }
     }
 
@@ -73,6 +75,20 @@ public class DehCommandManager {
 
             case CMD_LEADERBOARD:
                 leaderboard.showLeaderboard(p);
+                return true;
+
+            case CMD_LOCATION:
+                Location loc;
+                eggManager.loadPlacedLocation();
+                loc = eggManager.placedLocation;
+
+                if (loc == null)
+                {
+                    eggManager.loadSpawnLocation();
+                    loc = eggManager.spawnLocation;
+                }
+
+                p.sendMessage(NamedTextColor.GRAY + "Current location of the egg is: " + loc.toString());
                 return true;
         }
 

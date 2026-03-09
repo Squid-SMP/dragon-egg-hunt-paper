@@ -41,6 +41,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecutor {
 
@@ -56,22 +57,17 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     public final String CFG_BLOCK_Y = "placed_egg.y";
     public final String CFG_BLOCK_Z = "placed_egg.z";
 
-    public final String CFG_DROP_WORLD = "dropped_egg.world";
-    public final String CFG_DROP_X = "dropped_egg.x";
-    public final String CFG_DROP_Y = "dropped_egg.y";
-    public final String CFG_DROP_Z = "dropped_egg.z";
-    public final String CFG_DROP_TIME = "dropped_egg.time";
-    public final String CFG_DROP_UUID = "dropped_egg.uuid";
-
     private DehEggManager eggManager;
     private DehCommandManager commandManager;
     private DehLeaderboard leaderboard;
 
     public Server server;
+    public Logger log;
 
     @Override
     public void onEnable() {
         server = getServer();
+        log = getLogger();
 
         eggManager = new DehEggManager(this);
         commandManager = new DehCommandManager(this);
@@ -87,8 +83,6 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
         server.getPluginManager().registerEvents(this, this);
     }
-
-
 
     @EventHandler
     public void onEntityPortal(EntityPortalEvent event) {
@@ -133,24 +127,16 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
         if (hasEgg) {
             World.Environment toEnv = to.getWorld().getEnvironment();
-            String spawnWorldName = getConfig().getString(CFG_SPAWN_WORLD);
-            boolean isGoingHome = spawnWorldName != null && to.getWorld().getName().equals(spawnWorldName);
 
-            if (toEnv == World.Environment.THE_END) {
-                eggManager.stripAndRespawnEgg(p);
-                p.sendMessage(NamedTextColor.RED + "The Artifact cannot enter The End!");
-                return;
+            switch (toEnv) {
+                case World.Environment.THE_END:
+                    eggManager.stripAndRespawnEgg(p);
+                    p.sendMessage(NamedTextColor.RED + "The Artifact cannot enter The End!");
+                    break;
+                case World.Environment.NETHER:
+                    eggManager.stripAndRespawnEgg(p);
+                    p.sendMessage(NamedTextColor.RED + "The Artifact cannot enter The Nether!");
             }
-
-            if (toEnv == World.Environment.NETHER) {
-                return;
-            }
-
-            if (toEnv == World.Environment.NORMAL && isGoingHome) {
-                return;
-            }
-
-            eggManager.stripAndDropEgg(p, from);
         }
     }
 
@@ -179,9 +165,17 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
     @EventHandler
     public void onPlayerDropItem(PlayerDropItemEvent event) {
-        if (eggManager.isSpecialEgg(event.getItemDrop().getItemStack())) {
-            eggManager.saveDroppedLocation(event.getItemDrop());
+        Item droppedItem = event.getItemDrop();
+        ItemStack droppedItemStack = droppedItem.getItemStack();
+        if (!eggManager.isSpecialEgg(droppedItemStack)) {
+            return;
         }
+
+        droppedItem.remove();
+
+        eggManager.respawnEgg();
+
+        broadcast("The Artifact was dropped and has returned to its shrine!", NamedTextColor.RED);
     }
 
     @EventHandler
@@ -256,12 +250,14 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         Player p = event.getPlayer();
         pickupTimes.remove(p.getUniqueId());
         for (ItemStack item : p.getInventory().getContents()) {
-            if (item != null && eggManager.isSpecialEgg(item)) {
-                p.getInventory().remove(item);
-                Item dropped = p.getWorld().dropItemNaturally(p.getLocation(), item);
-                eggManager.saveDroppedLocation(dropped);
-                broadcast("The Artifact has been dropped because the holder fled the world!", NamedTextColor.YELLOW);
+            if (item == null || !eggManager.isSpecialEgg(item)) {
+                continue;
             }
+            p.getInventory().remove(item);
+
+            eggManager.respawnEgg();
+
+            broadcast("The Artifact has respawned because the holder fled the world!", NamedTextColor.YELLOW);
         }
     }
 
@@ -272,7 +268,6 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             broadcast("⚠ The Artifact has been picked up! ⚠", NamedTextColor.DARK_RED);
             pickupTimes.put(p.getUniqueId(), System.currentTimeMillis());
             leaderboard.incrementStat(p.getUniqueId(), "captures");
-            eggManager.clearDroppedLocation();
         }
     }
 
@@ -282,7 +277,6 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
             event.setCancelled(false);
             event.setBuild(true);
             eggManager.saveEggBlockLocation(event.getBlock().getLocation());
-            eggManager.clearDroppedLocation();
             event.getPlayer().sendMessage(NamedTextColor.GOLD + "The Artifact is secured. Tracking active.");
             broadcast("The Artifact has been placed in the world!", NamedTextColor.GOLD);
         }
@@ -295,7 +289,6 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
                 event.setCancelled(false);
                 event.setDropItems(false);
                 Item dropped = event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), eggManager.createSpecialEgg());
-                eggManager.saveDroppedLocation(dropped);
                 eggManager.clearEggBlockLocation();
                 broadcast( "⚠ The Artifact has been dislodged! ⚠", NamedTextColor.DARK_RED);
             }
@@ -313,7 +306,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
                             event.getClickedBlock().getLocation(),
                             eggManager.createSpecialEgg()
                     );
-                    eggManager.saveDroppedLocation(dropped);
+
                     eggManager.clearEggBlockLocation();
                     broadcast("⚠ The Artifact has been stolen! ⚠", NamedTextColor.DARK_RED);
                 }
@@ -326,7 +319,6 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         if (event.getEntity() instanceof FallingBlock) {
             if (((FallingBlock) event.getEntity()).getBlockData().getMaterial() == Material.DRAGON_EGG) {
                 eggManager.saveEggBlockLocation(event.getBlock().getLocation());
-                eggManager.clearDroppedLocation();
             }
         }
     }
