@@ -13,15 +13,18 @@ import java.util.UUID;
 public class DehLeaderboard {
     private final DragonEggHunt plugin;
 
+    public FileConfiguration config;
+
     public DehLeaderboard(DragonEggHunt plugin) {
         this.plugin = plugin;
+        config = plugin.getConfig();
     }
 
     public void showLeaderboard(Player player) {
         player.sendMessage(NamedTextColor.GOLD + "=== Artifact Legends (Time Held) ===");
         Map<String, Integer> timeScores = new HashMap<>();
 
-        ConfigurationSection statsSection = plugin.getConfig().getConfigurationSection("stats");
+        ConfigurationSection statsSection = config.getConfigurationSection("stats");
         if (statsSection == null) {
             player.sendMessage(NamedTextColor.GRAY + "No records yet.");
             return;

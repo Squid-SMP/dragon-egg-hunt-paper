@@ -5,6 +5,7 @@ import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
@@ -19,8 +20,11 @@ public class DehCommandManager {
     private DehEggManager eggManager;
     private DehLeaderboard leaderboard;
 
+    public FileConfiguration config;
+
     public DehCommandManager(DragonEggHunt plugin) {
         this.plugin = plugin;
+        config = plugin.getConfig();
 
         registerCommand(CMD_TRACK);
         registerCommand(CMD_SET_SPAWN);
@@ -70,7 +74,7 @@ public class DehCommandManager {
                 return true;
 
             case CMD_TRACK:
-                eggManager.trackEggLogic(p);
+                eggManager.trackEgg(p);
                 return true;
 
             case CMD_LEADERBOARD:

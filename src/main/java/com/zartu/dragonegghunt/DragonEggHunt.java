@@ -51,8 +51,16 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     public final String CFG_HOLDER_UUID = "egg_holder.uuid";
     public final String CFG_HOLDER_TIME = "egg_holder.time";
     public final String CFG_PLACER_UUID = "egg_placer.uuid";
+    public final String CFG_PLACER_TIME = "egg_placer.time";
+
+    public final String CFG_TRACK_RADIUS = "egg_tracker.radius";
+    public final String CFG_TRACK_OFFSET_X = "egg_tracker.offset_x";
+    public final String CFG_TRACK_OFFSET_Y = "egg_tracker.offset_y";
 
     public final String CFG_OFFLINE_PLAYERS = "offline_players";
+
+    public final int TRACK_RADIUS_BASE = 1000;
+    public final int TRACK_RADIUS_REDUCTION = 100;
 
     public List<String> offlinePlayers;
 
@@ -62,11 +70,13 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
     public Server server;
     public Logger log;
+    public FileConfiguration config;
 
     @Override
     public void onEnable() {
         server = getServer();
         log = getLogger();
+        config = getConfig();
 
         eggManager = new DehEggManager(this);
         commandManager = new DehCommandManager(this);
@@ -81,13 +91,11 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
         server.getPluginManager().registerEvents(this, this);
 
-        offlinePlayers = getConfig().getStringList(CFG_OFFLINE_PLAYERS);
+        offlinePlayers = config.getStringList(CFG_OFFLINE_PLAYERS);
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        FileConfiguration config = getConfig();
-
         Player player = event.getPlayer();
         UUID playerUUID = player.getUniqueId();
 
@@ -101,8 +109,6 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        FileConfiguration config = getConfig();
-
         String configUUID = config.getString(CFG_HOLDER_UUID);
 
         if (configUUID == null) {
@@ -304,7 +310,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         }
 
         String playerUUIDStr = player.getUniqueId().toString();
-        String placerUUIDStr = getConfig().getString(CFG_PLACER_UUID);
+        String placerUUIDStr = config.getString(CFG_PLACER_UUID);
         if (playerUUIDStr.equals(placerUUIDStr)) {
             sendMessage(player, "You cannot pick up The Artifact again.", NamedTextColor.RED);
             return;

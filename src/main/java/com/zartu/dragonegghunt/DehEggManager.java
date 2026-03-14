@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class DehEggManager {
     public NamespacedKey eggKey;
@@ -31,8 +32,11 @@ public class DehEggManager {
 
     private final Duration maxHoldTime = Duration.ofSeconds(15);
 
+    public FileConfiguration config;
+
     public DehEggManager(DragonEggHunt plugin) {
         this.plugin = plugin;
+        config = plugin.getConfig();
         eggKey = new NamespacedKey(plugin, "ctf_dragon_egg");
 
         BukkitRunnable runnable = new BukkitRunnable() {
@@ -55,8 +59,6 @@ public class DehEggManager {
     }
 
     private void checkHolder() {
-        FileConfiguration config = plugin.getConfig();
-
         String configUUID = config.getString(plugin.CFG_HOLDER_UUID);
 
         if (configUUID == null) {
@@ -86,8 +88,6 @@ public class DehEggManager {
     }
 
     private void checkPlacer() {
-        FileConfiguration config = plugin.getConfig();
-
         String configUUID = config.getString(plugin.CFG_PLACER_UUID);
 
         if (configUUID == null) {
@@ -104,8 +104,6 @@ public class DehEggManager {
     }
 
     public void onEggPickedUp(Player player) {
-        FileConfiguration config = plugin.getConfig();
-
         UUID playerUUID = player.getUniqueId();
 
         config.set(plugin.CFG_HOLDER_UUID, playerUUID.toString());
@@ -117,8 +115,6 @@ public class DehEggManager {
     }
 
     public void onEggRemoved(Player player) {
-        FileConfiguration config = plugin.getConfig();
-
         String configUUID = config.getString(plugin.CFG_HOLDER_UUID);
 
         if (configUUID == null) {
@@ -132,27 +128,24 @@ public class DehEggManager {
     }
 
     private void resetHolderConfig() {
-        FileConfiguration config = plugin.getConfig();
-
         config.set(plugin.CFG_HOLDER_UUID, null);
         config.set(plugin.CFG_HOLDER_TIME, null);
     }
 
     private void resetPlacerConfig() {
-        FileConfiguration config = plugin.getConfig();
-
         config.set(plugin.CFG_PLACER_UUID, null);
+        config.set(plugin.CFG_PLACER_TIME, null);
     }
 
 
     public void onEggPlaced(Player player, Location location) {
-        FileConfiguration config = plugin.getConfig();
-
         saveEggBlockLocation(location);
 
         resetHolderConfig();
+        resetTrackConfig();
 
         config.set(plugin.CFG_PLACER_UUID, player.getUniqueId().toString());
+        config.set(plugin.CFG_PLACER_TIME, System.currentTimeMillis());
     }
 
     // --- Special Egg Handling ---
@@ -258,8 +251,6 @@ public class DehEggManager {
 
         saveEggBlockLocation(spawnLocation);
 
-        FileConfiguration config = plugin.getConfig();
-
         resetHolderConfig();
     }
 
@@ -270,65 +261,78 @@ public class DehEggManager {
 
     // --- Tracking ---
 
-    public void trackEggLogic(Player tracker) {
+    public void trackEgg(Player tracker) {
         Location target = null;
-        String status = "Unknown";
-        FileConfiguration config = plugin.getConfig();
 
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            for (ItemStack i : p.getInventory()) {
-                if (isSpecialEgg(i)) {
-                    target = p.getLocation();
-                    status = "Held by Unknown";
-                    break;
-                }
-            }
+        if (config.contains(plugin.CFG_HOLDER_UUID)) {
+            plugin.sendMessage(tracker, "Signal currently in movement.", NamedTextColor.GOLD);
+            return;
         }
 
-        if (target == null && config.contains(plugin.CFG_BLOCK_WORLD)) {
-            String wName = config.getString(plugin.CFG_BLOCK_WORLD);
-            if (wName != null) {
-                World w = Bukkit.getWorld(wName);
-                if (w != null) {
-                    target = new Location(w,
-                            config.getInt(plugin.CFG_BLOCK_X),
-                            config.getInt(plugin.CFG_BLOCK_Y),
-                            config.getInt(plugin.CFG_BLOCK_Z));
-                    status = "Secured in World";
-                }
-            }
-        }
-
-        if (target == null) {
-            for (World w : Bukkit.getWorlds()) {
-                for (Entity e : w.getEntities()) {
-                    if (e instanceof Item itemEntity) {
-                        if (isSpecialEgg(itemEntity.getItemStack())) {
-                            target = e.getLocation();
-                            status = "Dropped on ground";
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        loadPlacedLocation();
+        target = placedLocation;
 
         if (target == null) {
             plugin.sendMessage(tracker, "Signal lost. (The Artifact may be lost in time...)", NamedTextColor.RED);
             return;
         }
 
-        int radius = 300;
-        double angle = Math.random() * 2 * Math.PI;
-        double dist = Math.random() * (radius * 0.6);
-        int offsetX = (int) (Math.cos(angle) * dist);
-        int offsetZ = (int) (Math.sin(angle) * dist);
-        int cX = target.getBlockX() + offsetX;
-        int cZ = target.getBlockZ() + offsetZ;
+        long timePlace = config.getLong(plugin.CFG_PLACER_TIME);
+        long msSincePlace = System.currentTimeMillis() - timePlace;
 
-        plugin.sendMessage(tracker, "--- Artifact Tracker (" + status + ") ---", NamedTextColor.GOLD);
+        var a = msSincePlace / 1800000;
+        int halfHourIntervalsSincePlace = Math.round(a);
+        plugin.log.info(String.valueOf(a));
+        plugin.log.info(String.valueOf(halfHourIntervalsSincePlace));
+
+        int radius = plugin.TRACK_RADIUS_BASE - (halfHourIntervalsSincePlace * plugin.TRACK_RADIUS_REDUCTION);
+        if (radius < plugin.TRACK_RADIUS_REDUCTION) {
+            radius = plugin.TRACK_RADIUS_REDUCTION;
+        }
+
+        if (config.contains(plugin.CFG_TRACK_RADIUS)) {
+            int configRadius = config.getInt(plugin.CFG_TRACK_RADIUS);
+
+            if (radius != configRadius) {
+                resetTrackConfig();
+            }
+        }
+
+        config.set(plugin.CFG_TRACK_RADIUS, radius);
+
+        int offsetX = 0;
+        int offsetY = 0;
+
+        ThreadLocalRandom rand = ThreadLocalRandom.current();
+
+        if (!config.contains(plugin.CFG_TRACK_OFFSET_X)) {
+            offsetX = rand.nextInt(-radius, radius);
+            config.set(plugin.CFG_TRACK_OFFSET_X, offsetX);
+        }
+        else {
+            offsetX = config.getInt(plugin.CFG_TRACK_OFFSET_X);
+        }
+
+        if (!config.contains(plugin.CFG_TRACK_OFFSET_Y)) {
+            offsetY = rand.nextInt(-radius, radius);
+            config.set(plugin.CFG_TRACK_OFFSET_Y, offsetY);
+        }
+        else {
+            offsetY = config.getInt(plugin.CFG_TRACK_OFFSET_Y);
+        }
+
+        int cX = target.getBlockX() + offsetX;
+        int cZ = target.getBlockZ() + offsetY;
+
+        plugin.sendMessage(tracker, "——— Artifact Tracker ———", NamedTextColor.GOLD);
         plugin.sendMessage(tracker, "Search Area: X[" + (cX - radius) + " : " + (cX + radius) + "]", NamedTextColor.YELLOW);
         plugin.sendMessage(tracker, "Search Area: Z[" + (cZ - radius) + " : " + (cZ + radius) + "]", NamedTextColor.YELLOW);
+    }
+
+    private void resetTrackConfig() {
+        config.set(plugin.CFG_TRACK_RADIUS, null);
+        config.set(plugin.CFG_TRACK_OFFSET_X, null);
+        config.set(plugin.CFG_TRACK_OFFSET_Y, null);
     }
 
     // --- Location Management ---
@@ -341,8 +345,6 @@ public class DehEggManager {
         if (spawnWorld == null) {
             return;
         }
-
-        FileConfiguration config = plugin.getConfig();
 
         double x = spawnLoc.getX();
         double y = spawnLoc.getY();
@@ -359,9 +361,10 @@ public class DehEggManager {
     }
 
     public void saveEggBlockLocation(Location loc) {
-        FileConfiguration config = plugin.getConfig();
+        if (loc.getWorld() == null) {
+            return;
+        }
 
-        if (loc.getWorld() == null) return;
         config.set(plugin.CFG_BLOCK_WORLD, loc.getWorld().getName());
         config.set(plugin.CFG_BLOCK_X, loc.getBlockX());
         config.set(plugin.CFG_BLOCK_Y, loc.getBlockY());
@@ -377,10 +380,13 @@ public class DehEggManager {
     }
 
     public boolean isSavedEggLocation(Location loc) {
-        FileConfiguration config = plugin.getConfig();
+        if (!config.contains(plugin.CFG_BLOCK_WORLD)) {
+            return false;
+        }
 
-        if (!config.contains(plugin.CFG_BLOCK_WORLD)) return false;
-        if (loc.getWorld() == null) return false;
+        if (loc.getWorld() == null) {
+            return false;
+        }
 
         String savedWorld = config.getString(plugin.CFG_BLOCK_WORLD);
         if (savedWorld == null) return false;
@@ -392,8 +398,6 @@ public class DehEggManager {
     }
 
     public void loadSpawnLocation() {
-        FileConfiguration config = plugin.getConfig();
-
         if (!config.contains(plugin.CFG_SPAWN_WORLD)) {
             return;
         }
@@ -416,19 +420,20 @@ public class DehEggManager {
     }
 
     public void loadPlacedLocation() {
-        FileConfiguration config = plugin.getConfig();
-
         if (!config.contains(plugin.CFG_BLOCK_WORLD)) {
+            placedLocation = null;
             return;
         }
 
         String worldName = config.getString(plugin.CFG_BLOCK_WORLD);
         if (worldName == null) {
+            placedLocation = null;
             return;
         }
 
         World w = Bukkit.getWorld(worldName);
         if (w == null) {
+            placedLocation = null;
             return;
         }
 

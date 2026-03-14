@@ -14,10 +14,10 @@ commands:
     permission: dragonegg.admin
   eggreset:
     description: Spawns the custom egg item for testing.
+    permission: dragonegg.mod
   eggleaderboard:
     description: Displays who has held the egg the longest.
     permission: dragonegg.track
-    permission: dragonegg.mod
   egglocation:
     description: Get exact location of the egg.
     permission: dragonegg.mod
