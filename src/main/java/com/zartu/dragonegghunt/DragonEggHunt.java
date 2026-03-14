@@ -303,7 +303,7 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
             eggManager.onEggPlaced(player, location);
 
-            sendMessage(event.getPlayer(), "The Artifact is secured. Tracking active.", NamedTextColor.GOLD);
+            sendMessage(event.getPlayer(), "The Artifact is secured. You have received the Dragon Crown!", NamedTextColor.GOLD);
             broadcast("The Artifact has been placed in the world!", NamedTextColor.GOLD);
         }
     }
