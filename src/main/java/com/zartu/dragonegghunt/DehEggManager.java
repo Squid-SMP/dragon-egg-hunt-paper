@@ -29,7 +29,7 @@ public class DehEggManager {
 
     public final Map<UUID, Long> pickupTimes = new HashMap<>();
 
-    private final Duration maxHoldTime = Duration.ofSeconds(15);
+    private final Duration maxHoldTime = Duration.ofMinutes(30);
 
     public FileConfiguration config;
 
