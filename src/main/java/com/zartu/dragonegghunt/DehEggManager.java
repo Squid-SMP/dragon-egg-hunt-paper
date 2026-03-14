@@ -6,8 +6,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -27,6 +25,7 @@ public class DehEggManager {
 
     private final DragonEggHunt plugin;
     private DehLeaderboard leaderboard;
+    private DehCrownManager crownManager;
 
     public final Map<UUID, Long> pickupTimes = new HashMap<>();
 
@@ -51,6 +50,10 @@ public class DehEggManager {
 
     public void setLeaderboard(DehLeaderboard leaderboard) {
         this.leaderboard = leaderboard;
+    }
+
+    public void setCrownManager(DehCrownManager crownManager) {
+        this.crownManager = crownManager;
     }
 
     private void update() {
@@ -133,6 +136,12 @@ public class DehEggManager {
     }
 
     private void resetPlacerConfig() {
+        if (config.contains(plugin.CFG_PLACER_UUID)) {
+            UUID placerUUID = UUID.fromString(config.getString(plugin.CFG_PLACER_UUID));
+            OfflinePlayer offlinePlacer = Bukkit.getOfflinePlayer(placerUUID);
+            crownManager.removeCrownFromOfflinePlayer(offlinePlacer);
+        }
+
         config.set(plugin.CFG_PLACER_UUID, null);
         config.set(plugin.CFG_PLACER_TIME, null);
     }
@@ -140,6 +149,8 @@ public class DehEggManager {
 
     public void onEggPlaced(Player player, Location location) {
         saveEggBlockLocation(location);
+
+        crownManager.giveCrownToPlayer(player);
 
         resetHolderConfig();
         resetTrackConfig();
@@ -280,12 +291,12 @@ public class DehEggManager {
         long timePlace = config.getLong(plugin.CFG_PLACER_TIME);
         long msSincePlace = System.currentTimeMillis() - timePlace;
 
-        var a = msSincePlace / 1800000;
-        int halfHourIntervalsSincePlace = Math.round(a);
+        var a = msSincePlace / 3600000;
+        int hourIntervalsSincePlace = Math.round(a);
         plugin.log.info(String.valueOf(a));
-        plugin.log.info(String.valueOf(halfHourIntervalsSincePlace));
+        plugin.log.info(String.valueOf(hourIntervalsSincePlace));
 
-        int radius = plugin.TRACK_RADIUS_BASE - (halfHourIntervalsSincePlace * plugin.TRACK_RADIUS_REDUCTION);
+        int radius = plugin.TRACK_RADIUS_BASE - (hourIntervalsSincePlace * plugin.TRACK_RADIUS_REDUCTION);
         if (radius < plugin.TRACK_RADIUS_REDUCTION) {
             radius = plugin.TRACK_RADIUS_REDUCTION;
         }

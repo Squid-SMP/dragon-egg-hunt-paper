@@ -1,6 +1,5 @@
 package com.zartu.dragonegghunt;
 
-import com.destroystokyo.paper.event.block.BlockDestroyEvent;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -18,19 +17,16 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
-import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.*;
-import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -57,16 +53,19 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     public final String CFG_TRACK_OFFSET_X = "egg_tracker.offset_x";
     public final String CFG_TRACK_OFFSET_Y = "egg_tracker.offset_y";
 
-    public final String CFG_OFFLINE_PLAYERS = "offline_players";
+    public final String CFG_EGG_OFFLINE_PLAYERS = "egg_offline_players";
+    public final String CFG_CROWN_OFFLINE_PLAYERS = "crown_offline_players";
 
     public final int TRACK_RADIUS_BASE = 1000;
     public final int TRACK_RADIUS_REDUCTION = 100;
 
-    public List<String> offlinePlayers;
+    public List<String> eggOfflinePlayers;
+    public List<String> crownOfflinePlayers;
 
     private DehEggManager eggManager;
     private DehCommandManager commandManager;
     private DehLeaderboard leaderboard;
+    private DehCrownManager crownManager;
 
     public Server server;
     public Logger log;
@@ -81,8 +80,10 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         eggManager = new DehEggManager(this);
         commandManager = new DehCommandManager(this);
         leaderboard = new DehLeaderboard(this);
+        crownManager = new DehCrownManager(this);
 
         eggManager.setLeaderboard(leaderboard);
+        eggManager.setCrownManager(crownManager);
         commandManager.setEggManager(eggManager);
         commandManager.setLeaderboard(leaderboard);
 
@@ -91,7 +92,8 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
         server.getPluginManager().registerEvents(this, this);
 
-        offlinePlayers = config.getStringList(CFG_OFFLINE_PLAYERS);
+        eggOfflinePlayers = config.getStringList(CFG_EGG_OFFLINE_PLAYERS);
+        crownOfflinePlayers = config.getStringList(CFG_CROWN_OFFLINE_PLAYERS);
     }
 
     @EventHandler
@@ -99,63 +101,37 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
         Player player = event.getPlayer();
         UUID playerUUID = player.getUniqueId();
 
-        if (offlinePlayers.contains(playerUUID.toString())) {
+        if (eggOfflinePlayers.contains(playerUUID.toString())) {
             eggManager.stripEgg(player);
-            offlinePlayers.remove(playerUUID.toString());
-            config.set(CFG_OFFLINE_PLAYERS, offlinePlayers);
+            eggOfflinePlayers.remove(playerUUID.toString());
+            config.set(CFG_EGG_OFFLINE_PLAYERS, eggOfflinePlayers);
+            saveConfig();
+        }
+
+        if (crownOfflinePlayers.contains(playerUUID.toString())) {
+            crownManager.removeCrownFromPlayer(player);
+            crownOfflinePlayers.remove(playerUUID.toString());
+            config.set(CFG_CROWN_OFFLINE_PLAYERS, crownOfflinePlayers);
             saveConfig();
         }
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        String configUUID = config.getString(CFG_HOLDER_UUID);
-
-        if (configUUID == null) {
-            return;
-        }
-
-        UUID holderUUID = UUID.fromString(configUUID);
-
         Player player = event.getPlayer();
         UUID playerUUID = player.getUniqueId();
 
+        String holderUUIDString = config.getString(CFG_HOLDER_UUID);
+        if (holderUUIDString == null) {
+            return;
+        }
+
+        UUID holderUUID = UUID.fromString(holderUUIDString);
+
         if (playerUUID.equals(holderUUID)) {
-            offlinePlayers.add(playerUUID.toString());
-            config.set(CFG_OFFLINE_PLAYERS, offlinePlayers);
+            eggOfflinePlayers.add(playerUUID.toString());
+            config.set(CFG_EGG_OFFLINE_PLAYERS, eggOfflinePlayers);
             saveConfig();
-        }
-    }
-
-    @EventHandler
-    public void onEntityPortal(EntityPortalEvent event) {
-        boolean respawnEgg = false;
-        Entity entity = event.getEntity();
-
-        if (entity instanceof Item item) {
-            ItemStack itemStack = item.getItemStack();
-            if (!eggManager.isSpecialEgg(itemStack)) {
-                return;
-            }
-
-            event.setCancelled(true);
-            item.remove();
-
-            respawnEgg = true;
-        }
-        else if (entity instanceof FallingBlock fallingBlock) {
-            if (fallingBlock.getBlockData().getMaterial() != Material.DRAGON_EGG) {
-                return;
-            }
-
-            event.setCancelled(true);
-            fallingBlock.remove();
-            respawnEgg = true;
-        }
-
-        if (respawnEgg) {
-            eggManager.respawnEgg();
-            broadcast("The Artifact has disintegrated and has returned to its shrine!", NamedTextColor.DARK_PURPLE);
         }
     }
 
@@ -213,13 +189,45 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
 
     @EventHandler
     public void onBundleInput(InventoryClickEvent event) {
+        boolean cancelled = false;
+
         ItemStack cursor = event.getCursor();
+        ItemStack current = event.getCurrentItem();
         if (eggManager.isSpecialEgg(cursor)) {
-            ItemStack current = event.getCurrentItem();
             if (current != null && current.getType() == Material.BUNDLE) {
                 event.setCancelled(true);
-                sendMessage(event.getWhoClicked(), "The Artifact is too powerful for a bundle!", NamedTextColor.RED);
+                cancelled = true;
             }
+        }
+        else if (Tag.ITEMS_BUNDLES.isTagged(cursor.getType())) {
+            if (eggManager.isSpecialEgg(current)) {
+                event.setCancelled(true);
+                cancelled = true;
+            }
+        }
+
+        if (cancelled) {
+            sendMessage(event.getWhoClicked(), "The Artifact is too powerful for a bundle!", NamedTextColor.RED);
+        }
+    }
+
+    @EventHandler
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (event.getWhoClicked().hasPermission("dragonegg.mod")) {
+            return;
+        }
+
+        ItemStack itemStack = event.getCurrentItem();
+        if (crownManager.isDragonCrown(itemStack)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onSwap(PlayerSwapHandItemsEvent event) {
+        ItemStack itemStack = event.getMainHandItem();
+        if (crownManager.isDragonCrown(itemStack)) {
+            event.setCancelled(true);
         }
     }
 
@@ -227,6 +235,12 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     public void onPlayerDropItem(PlayerDropItemEvent event) {
         Item droppedItem = event.getItemDrop();
         ItemStack droppedItemStack = droppedItem.getItemStack();
+
+        if (crownManager.isDragonCrown(droppedItemStack)) {
+            event.setCancelled(true);
+            return;
+        }
+
         if (!eggManager.isSpecialEgg(droppedItemStack)) {
             return;
         }
@@ -375,14 +389,38 @@ public class DragonEggHunt extends JavaPlugin implements Listener, CommandExecut
     }
 
     @EventHandler
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+
+        String placerUUIDStr = config.getString(CFG_PLACER_UUID);
+        if (placerUUIDStr == null) {
+            return;
+        }
+
+        String playerUUIDStr = player.getUniqueId().toString();
+        if (playerUUIDStr.equals(placerUUIDStr)) {
+            crownManager.giveCrownToPlayer(player);
+        }
+    }
+
+    @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         List<ItemStack> drops = event.getDrops();
+        Player player = event.getPlayer();
 
-        drops.removeIf(item -> item != null && eggManager.isSpecialEgg(item));
+        drops.removeIf(item -> item != null && eggManager.isSpecialEgg(item) || crownManager.isDragonCrown(item));
 
-        eggManager.respawnEgg();
+        String holderUUIDStr = config.getString(CFG_HOLDER_UUID);
+        if (holderUUIDStr == null) {
+            return;
+        }
 
-        broadcast("The Artifact was lost and has returned to its shrine!", NamedTextColor.DARK_PURPLE);
+        String playerUUIDStr = player.getUniqueId().toString();
+        if (playerUUIDStr.equals(holderUUIDStr)) {
+            eggManager.respawnEgg();
+            broadcast("The Artifact was lost and has returned to its shrine!", NamedTextColor.DARK_PURPLE);
+        }
+
     }
 
     @Override

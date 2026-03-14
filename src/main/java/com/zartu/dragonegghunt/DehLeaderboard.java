@@ -2,6 +2,7 @@ package com.zartu.dragonegghunt;
 
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
@@ -21,12 +22,12 @@ public class DehLeaderboard {
     }
 
     public void showLeaderboard(Player player) {
-        player.sendMessage(NamedTextColor.GOLD + "=== Artifact Legends (Time Held) ===");
+        plugin.sendMessage(player, "——— Artifact Leaderboard ———", NamedTextColor.GOLD);
         Map<String, Integer> timeScores = new HashMap<>();
 
         ConfigurationSection statsSection = config.getConfigurationSection("stats");
         if (statsSection == null) {
-            player.sendMessage(NamedTextColor.GRAY + "No records yet.");
+            plugin.sendMessage(player, "No records yet.", NamedTextColor.GRAY);
             return;
         }
 
@@ -50,7 +51,7 @@ public class DehLeaderboard {
                 .limit(5)
                 .forEach(entry -> {
                     int minutes = entry.getValue() / 60;
-                    player.sendMessage(NamedTextColor.YELLOW + entry.getKey() + ": " + NamedTextColor.WHITE + minutes + " mins");
+                    plugin.sendMessage(player, entry.getKey() + ": " + ChatColor.WHITE + minutes + " mins", NamedTextColor.YELLOW);
                 });
     }
 
