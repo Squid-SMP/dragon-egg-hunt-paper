@@ -98,12 +98,7 @@ public class DehEggManager {
         }
 
         UUID placerUUID = UUID.fromString(configUUID);
-        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(placerUUID);
-        Player player = offlinePlayer.getPlayer();
-
-        if (player != null) {
-            leaderboard.incrementStat(placerUUID, "time_held");
-        }
+        leaderboard.incrementStat(placerUUID, "time_held");
     }
 
     public void onEggPickedUp(Player player) {

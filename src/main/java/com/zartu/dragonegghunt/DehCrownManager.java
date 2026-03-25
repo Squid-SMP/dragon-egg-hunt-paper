@@ -94,6 +94,7 @@ public class DehCrownManager {
         meta.addEnchant(Enchantment.PROTECTION, 4, false);
         meta.addEnchant(Enchantment.RESPIRATION, 3, false);
         meta.addEnchant(Enchantment.AQUA_AFFINITY, 1, false);
+        meta.addEnchant(Enchantment.BINDING_CURSE, 1, false);
 
         meta.setEnchantmentGlintOverride(false);
 
